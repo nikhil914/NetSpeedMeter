@@ -1,0 +1,154 @@
+import tkinter as tk
+from tkinter import ttk
+import psutil
+import time
+import threading
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import pystray
+from PIL import Image, ImageDraw
+import ctypes
+import os
+import sys
+import winreg
+
+class NetSpeedMonitor:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Net Speed Monitor")
+        self.root.geometry("300x200")
+        self.root.resizable(False, False)
+
+        self.always_on_top = tk.BooleanVar(value=True)
+        self.theme = tk.StringVar(value="dark")
+        self.unit = tk.StringVar(value="KB/s")
+        self.running = True
+
+        self.download_label = ttk.Label(root, text="Download: 0 KB/s")
+        self.download_label.pack(pady=5)
+
+        self.upload_label = ttk.Label(root, text="Upload: 0 KB/s")
+        self.upload_label.pack(pady=5)
+
+        self.toggle_theme_button = ttk.Button(root, text="Toggle Theme", command=self.toggle_theme)
+        self.toggle_theme_button.pack(pady=5)
+
+        self.unit_dropdown = ttk.Combobox(root, values=["KB/s", "MB/s", "Mbps"], textvariable=self.unit)
+        self.unit_dropdown.pack(pady=5)
+
+        self.always_on_top_check = ttk.Checkbutton(root, text="Always on Top", variable=self.always_on_top, command=self.set_always_on_top)
+        self.always_on_top_check.pack(pady=5)
+
+        self.create_graph()
+
+        self.prev_recv = psutil.net_io_counters().bytes_recv
+        self.prev_sent = psutil.net_io_counters().bytes_sent
+
+        self.data_history = {'download': [], 'upload': [], 'time': []}
+        self.update_speed()
+        self.set_always_on_top()
+        self.setup_tray_icon()
+
+        self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
+
+    def set_always_on_top(self):
+        self.root.wm_attributes("-topmost", self.always_on_top.get())
+
+    def toggle_theme(self):
+        theme = self.theme.get()
+        if theme == "dark":
+            self.root.configure(bg="white")
+            self.download_label.configure(background="white", foreground="black")
+            self.upload_label.configure(background="white", foreground="black")
+            self.theme.set("light")
+        else:
+            self.root.configure(bg="black")
+            self.download_label.configure(background="black", foreground="white")
+            self.upload_label.configure(background="black", foreground="white")
+            self.theme.set("dark")
+
+    def convert_units(self, speed):
+        unit = self.unit.get()
+        if unit == "KB/s":
+            return speed / 1024, "KB/s"
+        elif unit == "MB/s":
+            return speed / (1024 * 1024), "MB/s"
+        elif unit == "Mbps":
+            return (speed * 8) / (1024 * 1024), "Mbps"
+        else:
+            return speed / 1024, "KB/s"
+
+    def update_speed(self):
+        new_recv = psutil.net_io_counters().bytes_recv
+        new_sent = psutil.net_io_counters().bytes_sent
+
+        down_speed = new_recv - self.prev_recv
+        up_speed = new_sent - self.prev_sent
+
+        self.prev_recv = new_recv
+        self.prev_sent = new_sent
+
+        converted_down, unit = self.convert_units(down_speed)
+        converted_up, _ = self.convert_units(up_speed)
+
+        self.download_label.config(text=f"Download: {converted_down:.2f} {unit}")
+        self.upload_label.config(text=f"Upload: {converted_up:.2f} {unit}")
+
+        self.data_history['download'].append(converted_down)
+        self.data_history['upload'].append(converted_up)
+        self.data_history['time'].append(time.time())
+
+        if len(self.data_history['time']) > 60:
+            for key in self.data_history:
+                self.data_history[key].pop(0)
+
+        self.root.after(1000, self.update_speed)
+
+    def create_graph(self):
+        self.fig, self.ax = plt.subplots(figsize=(4, 2))
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
+        self.canvas.get_tk_widget().pack()
+
+        self.ani = animation.FuncAnimation(self.fig, self.animate_graph, interval=1000)
+
+    def animate_graph(self, i):
+        self.ax.clear()
+        self.ax.plot(self.data_history['time'], self.data_history['download'], label='Download')
+        self.ax.plot(self.data_history['time'], self.data_history['upload'], label='Upload')
+        self.ax.set_title("Speed over Time")
+        self.ax.legend()
+
+    def setup_tray_icon(self):
+        image = Image.new('RGB', (64, 64), color='black')
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((16, 16, 48, 48), fill='white')
+        self.icon = pystray.Icon("NetSpeedMonitor", image, menu=pystray.Menu(
+            pystray.MenuItem("Show", self.show_window),
+            pystray.MenuItem("Quit", self.quit_app)
+        ))
+        threading.Thread(target=self.icon.run, daemon=True).start()
+
+    def hide_window(self):
+        self.root.withdraw()
+
+    def show_window(self):
+        self.root.after(0, self.root.deiconify)
+
+    def quit_app(self):
+        self.running = False
+        self.icon.stop()
+        self.root.quit()
+
+
+def add_to_startup():
+    exe_path = sys.executable
+    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, winreg.KEY_SET_VALUE)
+    winreg.SetValueEx(key, "NetSpeedMonitor", 0, winreg.REG_SZ, exe_path)
+    winreg.CloseKey(key)
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = NetSpeedMonitor(root)
+    root.mainloop()
