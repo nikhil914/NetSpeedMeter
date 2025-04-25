@@ -8,6 +8,10 @@
 Net Speed Monitor is a compact and visually appealing Windows application that shows your current upload and download speed directly on the desktop or taskbar. Here’s how you can use all of its features:
 
 # 📥 Live Speed Display
+
+
+![Screenshot 2025-04-25 161106](https://github.com/user-attachments/assets/3f41ed70-4160-4327-841d-9bb3dfab79dc)
+
 Shows download (↓) and upload (↑) speeds in real-time.
 
 Displays speeds in configurable units: KB/s, MB/s, or Mbps.
