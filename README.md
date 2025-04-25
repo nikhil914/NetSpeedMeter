@@ -1,5 +1,6 @@
 # NetSpeedMeter for Windows
 Net Speed Meter
+![nsm_logo](https://github.com/user-attachments/assets/5d7d592c-17ff-4f77-8189-8ad9196a796f)
 
 # 🚀 Usage
 Net Speed Monitor is a compact and visually appealing Windows application that shows your current upload and download speed directly on the desktop or taskbar. Here’s how you can use all of its features:
